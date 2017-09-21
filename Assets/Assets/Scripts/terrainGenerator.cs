@@ -2,18 +2,6 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-class TerrainTile
-{
-	public Terrain tile;
-	public float creationTime;
-
-	public TerrainTile(Terrain t, float ct)
-	{
-		tile = t;
-		creationTime = ct;
-	}
-}
-
 public class terrainGenerator : MonoBehaviour {
 
 	public bool debug_drawTrees = true;
@@ -102,7 +90,6 @@ public class terrainGenerator : MonoBehaviour {
 		//Set time and space origins
 		this.gameObject.transform.position = Vector3.zero;
 		startPos = Vector3.zero;
-		float updateTime = Time.realtimeSinceStartup;
 
 		//create starint planes
 		for (int x =-cullRadiusX; x<cullRadiusX; x++)
@@ -115,31 +102,33 @@ public class terrainGenerator : MonoBehaviour {
 				Terrain t = generateTerrain(pos);
 
 				//log the terrain in a table
-				addChunk(t,updateTime);
+				addChunk(t);
 			}
 		}
 		setNeighbors();
+		Terrain startTerrain = (Terrain)chunkTable["chunk_0_0"];
+		float startHeight = startTerrain.terrainData.GetHeight(0,0);
+		player.transform.position = new Vector3(0,startHeight+2,0);
 	}
 
 	//log chunk into our table, so we can retrieve them when get to its location rather than rebuilding it
-	void addChunk(Terrain t, float time)
+	void addChunk(Terrain t)
 	{
 		string chunkName = "chunk_"+((int)(t.transform.position.x/size))+"_"+((int)(t.transform.position.z/size));
 		t.name = chunkName;
-		TerrainTile tile = new TerrainTile(t, time);
-		chunkTable.Add(chunkName, tile);
+		chunkTable.Add(chunkName, t);
 	}
 
 	//Create terrain data, including heightmaps, splatmaps, biomes and features
 	Terrain generateTerrain(Vector3 pos)
-	{
+	{			
 		//make the terrain and its data
 		Terrain t = (Terrain) Instantiate(defaultLand,pos,Quaternion.identity);
 		Vector3 seaCenter = new Vector3(pos.x+(size/2),seaLevel*height,pos.z+(size/2));
 		if (debug_renderWater)
 		{
 			GameObject sea = (GameObject) Instantiate(water,seaCenter,Quaternion.identity);
-			sea.name = "water_"+pos.x+"_"+pos.z;
+			sea.name = "water_"+pos.x/size+"_"+pos.z/size;
 			float waterScale = ((float)size)/10f;
 			sea.transform.localScale = new Vector3 (waterScale,0,waterScale);
 		}
@@ -227,6 +216,7 @@ public class terrainGenerator : MonoBehaviour {
 				float xCoord = (seedBiome+(t.transform.position.x+(x)))*scale;
 				float zCoord = (seedBiome+(t.transform.position.z+(z)))*scale;
 
+				/*
 				//moisture map, unused
 				float m = (
 					(m1 * Mathf.PerlinNoise(1*xCoord,1*zCoord)) + 
@@ -237,10 +227,11 @@ public class terrainGenerator : MonoBehaviour {
 					(m6 * Mathf.PerlinNoise(32*xCoord,32*zCoord)));
 
 				m /= (m1+m2+m3+m4+m5+m6);
+				*/
 
 				float terrainHeight = t.terrainData.GetHeight(z,x);
 				float angle = t.terrainData.GetSteepness(nz, nx);
-				int terrainType = getBiome(terrainHeight,m,angle);
+				int terrainType = getBiome(terrainHeight,angle);
 				for (int j=0; j<t.terrainData.alphamapLayers; j++)
 				{
 					splatmapData[x,z,j] = 0;
@@ -251,7 +242,7 @@ public class terrainGenerator : MonoBehaviour {
 		return splatmapData;
 	}
 
-	int getBiome(float elevation, float moisture, float angle)
+	int getBiome(float elevation, float angle)
 	{
 		//make el a fraction of the highest height
 		float el = elevation/height;
@@ -315,17 +306,17 @@ public class terrainGenerator : MonoBehaviour {
 			{
 				if (maps[z,x,plainsIndex] != 0f)
 				{
-					grassMap1[z, x] = 1;
+					grassMap1[z, x] = 3;
 					grassMap2[z, x] = 0;
-					grassMap3[z, x] = 1;
-					grassMap4[z, x] = 1;
+					grassMap3[z, x] = 3;
+					grassMap4[z, x] = 2;
 					unitsForest++;
 				}
 				else if (maps[z,x,forestIndex] != 0f)
 				{
-					grassMap1[z, x] = 1;
-					grassMap2[z, x] = 1;
-					grassMap3[z, x] = 1;
+					grassMap1[z, x] = 2;
+					grassMap2[z, x] = 4;
+					grassMap3[z, x] = 2;
 					grassMap4[z, x] = 1;
 					unitsForest++;
 				}
@@ -350,16 +341,12 @@ public class terrainGenerator : MonoBehaviour {
 		{
 			//apply trees
 			bool[,] placement = new bool[size,size]; //true=tree there
-			//float plainsTreeChance = 0.5f;
-			//float beachTreeChance = 0.01f;
-			//float mountainTreeChance = 0.03f;
 			float mountainTreeChance = 1f;
-			float beachTreeChance = 1f;
+			float beachTreeChance = .25f;
 			float plainsTreeChance = 1f;
 
 			int numTrees = 0;
-			float realDensity = treeDensity;
-			//float realDensity = ((float)unitsForest/((float)size*(float)size))*(float)treeDensity;
+			float realDensity = ((float)unitsForest/((float)size*(float)size))*(float)treeDensity;
 			//print("Input Density: "+treeDensity+" realDensity: "+realDensity+" unitsForest: "+unitsForest+" size"+size);
 			while (numTrees < realDensity)
 			{
@@ -406,7 +393,7 @@ public class terrainGenerator : MonoBehaviour {
 			list[1]=1;
 			list[2]=6;
 			tree.prototypeIndex = list[Random.Range(0,list.Length-1)];
-			tree.heightScale = (Random.value+0.5f)*2;
+			tree.heightScale = (Random.value+0.5f)*1.2f;
 			tree.widthScale = tree.heightScale;
 			//trees 0,1,6
 		}
@@ -423,7 +410,7 @@ public class terrainGenerator : MonoBehaviour {
 			list[6]=10;
 			list[7]=11;
 			tree.prototypeIndex = list[Random.Range(0,list.Length-1)];
-			tree.heightScale = (Random.value+1.0f);
+			tree.heightScale = (Random.value+0.5f);
 			tree.widthScale = tree.heightScale;
 			//trees 4-11
 		}
@@ -437,7 +424,7 @@ public class terrainGenerator : MonoBehaviour {
 			list[3]=10;
 			list[4]=11;
 			tree.prototypeIndex = list[Random.Range(0,list.Length-1)];
-			tree.heightScale = (Random.value+1.0f);
+			tree.heightScale = (Random.value+0.5f);
 			tree.widthScale = tree.heightScale;
 			//trees 2,8-11
 		}
@@ -451,7 +438,7 @@ public class terrainGenerator : MonoBehaviour {
 			list[3]=10;
 			list[4]=11;
 			tree.prototypeIndex = list[Random.Range(0,list.Length-1)];
-			tree.heightScale = (Random.value+1.0f)*4;
+			tree.heightScale = (Random.value+0.2f)*2;
 			tree.widthScale = tree.heightScale;
 			//trees 3,8-11
 		}
@@ -461,14 +448,14 @@ public class terrainGenerator : MonoBehaviour {
 			list[0]=5;
 			list[1]=11;
 			tree.prototypeIndex = list[Random.Range(0,list.Length-1)];
-			tree.heightScale = (Random.value+1.0f)*1.5f;
+			tree.heightScale = (Random.value+0.3f)*1.5f;
 			tree.widthScale = tree.heightScale;
 			//trees 5,11
 		}
 		if (tree.prototypeIndex >= 4)
 		{
-			tree.heightScale *= 2;
-			tree.widthScale *= 2;
+			tree.heightScale *= 1;
+			tree.widthScale *= 1;
 		}
 		float nx = ((float)x/size);
 		float nz = ((float)z/size);
@@ -540,49 +527,38 @@ public class terrainGenerator : MonoBehaviour {
 
 		if (Mathf.Abs(xMove) >= size || Mathf.Abs(zMove) >= size)
 		{
-			float updateTime = Time.realtimeSinceStartup;
 			int playerX = (int)(Mathf.Floor(player.transform.position.x/size)*size);
 			int playerZ = (int)(Mathf.Floor(player.transform.position.z/size)*size);
 
-			for (int x = -cullRadiusX; x<cullRadiusX; x++)
-			{
-				for (int z = -cullRadiusZ; z<cullRadiusZ; z++)
-				{
-					Vector3 pos = new Vector3((x*size+playerX),0,(z*size+playerZ));
-
-					string chunkName = "chunk_"+((int)(pos.x/size))+"_"+((int)(pos.z/size));
-
-					if (!chunkTable.ContainsKey(chunkName))
-					{
-						print(chunkName+" not found in chunk table, generating new one.");
-						Terrain t = generateTerrain(pos);
-						addChunk(t,updateTime);
-					}
-					else
-					{
-						print(chunkName+" found, retrieving that one.");
-						(chunkTable[chunkName] as TerrainTile).creationTime = updateTime;
-					}
-				}
-			}
-
-			Hashtable newTerrain = new Hashtable();
-			foreach(TerrainTile t in chunkTable.Values)
-			{
-				if (t.creationTime != updateTime)
-				{
-					Destroy(t.tile);
-				}
-				else
-				{
-					newTerrain.Add(t.tile.name,t);
-				}
-			}
-
-			chunkTable = newTerrain;
-			startPos = player.transform.position;
+			StartCoroutine(CoroutineGen(playerX,playerZ));
 
 			setNeighbors();
+		}
+	}
+
+	IEnumerator CoroutineGen(float playerX, float playerZ)
+	{
+		for (int x = -cullRadiusX; x<cullRadiusX; x++)
+		{
+			for (int z = -cullRadiusZ; z<cullRadiusZ; z++)
+			{
+				Vector3 pos = new Vector3((x*size+playerX),0,(z*size+playerZ));
+
+				string chunkName = "chunk_"+((int)(pos.x/size))+"_"+((int)(pos.z/size));
+
+				if (!chunkTable.ContainsKey(chunkName) && GameObject.Find(chunkName) == null)
+				{
+					print(chunkName+" not found in chunk table, generating new one.");
+					Terrain t = generateTerrain(pos);
+					addChunk(t);
+				}
+				else if (chunkTable.ContainsKey(chunkName) && (GameObject.Find(chunkName) == null))
+				{
+					Terrain t = (Terrain)chunkTable[chunkName];
+					Instantiate(t,t.transform.position,Quaternion.identity);
+				}	
+				yield return null;
+			}
 		}
 	}
 }
