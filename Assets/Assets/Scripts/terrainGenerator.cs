@@ -1,7 +1,6 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using System.Linq; // used for Sum of array
 
 class TerrainTile
 {
@@ -17,8 +16,10 @@ class TerrainTile
 
 public class terrainGenerator : MonoBehaviour {
 
-	public bool debug_drawTrees = false;
+	public bool debug_drawTrees = true;
 	public bool debug_ContinueGenerating = false;
+	public bool debug_renderWater = false;
+	public bool debug_DrawGrass = false;
 
 	public GameObject player;
 	public Terrain defaultLand;
@@ -135,7 +136,13 @@ public class terrainGenerator : MonoBehaviour {
 		//make the terrain and its data
 		Terrain t = (Terrain) Instantiate(defaultLand,pos,Quaternion.identity);
 		Vector3 seaCenter = new Vector3(pos.x+(size/2),seaLevel*height,pos.z+(size/2));
-		GameObject sea = (GameObject) Instantiate(water,seaCenter,Quaternion.identity);
+		if (debug_renderWater)
+		{
+			GameObject sea = (GameObject) Instantiate(water,seaCenter,Quaternion.identity);
+			sea.name = "water_"+pos.x+"_"+pos.z;
+			float waterScale = ((float)size)/10f;
+			sea.transform.localScale = new Vector3 (waterScale,0,waterScale);
+		}
 		t.terrainData.alphamapResolution = size+1;
 
 		TerrainData newChunk = new TerrainData();
@@ -156,6 +163,7 @@ public class terrainGenerator : MonoBehaviour {
 		newChunk.SetDetailResolution(size,16);
 		newChunk.detailPrototypes = defaultLand.terrainData.detailPrototypes;
 		newChunk.treePrototypes = defaultLand.terrainData.treePrototypes;
+		newChunk.wavingGrassAmount = newChunk.wavingGrassAmount/2;
 		t = populateGround(t);
 
 		//final applying of things
@@ -292,13 +300,14 @@ public class terrainGenerator : MonoBehaviour {
 
 	Terrain populateGround(Terrain t)
 	{
+		float[,,] maps = t.terrainData.GetAlphamaps(0, 0, size, size);
+		int unitsForest = 0;
+
 		int[,] grassMap1 = new int[size,size];
 		int[,] grassMap2 = new int[size,size];
 		int[,] grassMap3 = new int[size,size];
 		int[,] grassMap4 = new int[size,size];
 
-		float[,,] maps = t.terrainData.GetAlphamaps(0, 0, size, size);
-		int unitsForest = 0;
 		//apply grass
 		for (int z = 0; z < size; z++)
 		{
@@ -314,7 +323,7 @@ public class terrainGenerator : MonoBehaviour {
 				}
 				else if (maps[z,x,forestIndex] != 0f)
 				{
-					grassMap1[z, x] = 2;
+					grassMap1[z, x] = 1;
 					grassMap2[z, x] = 1;
 					grassMap3[z, x] = 1;
 					grassMap4[z, x] = 1;
@@ -328,22 +337,29 @@ public class terrainGenerator : MonoBehaviour {
 					grassMap4[z, x] = 0;
 				}
 			}
-		}
-		t.terrainData.SetDetailLayer(0, 0, 0, grassMap1);
-		t.terrainData.SetDetailLayer(0, 0, 1, grassMap2);
-		t.terrainData.SetDetailLayer(0, 0, 2, grassMap3);
-		t.terrainData.SetDetailLayer(0, 0, 3, grassMap4);
 
+			if (debug_DrawGrass)
+			{
+				t.terrainData.SetDetailLayer(0, 0, 0, grassMap1);
+				t.terrainData.SetDetailLayer(0, 0, 1, grassMap2);
+				t.terrainData.SetDetailLayer(0, 0, 2, grassMap3);
+				t.terrainData.SetDetailLayer(0, 0, 3, grassMap4);
+			}
+		}
 		if (debug_drawTrees)
 		{
 			//apply trees
 			bool[,] placement = new bool[size,size]; //true=tree there
-			float plainsTreeChance = 0.5f;
-			float beachTreeChance = 0.01f;
-			float mountainTreeChance = 0.03f;
+			//float plainsTreeChance = 0.5f;
+			//float beachTreeChance = 0.01f;
+			//float mountainTreeChance = 0.03f;
+			float mountainTreeChance = 1f;
+			float beachTreeChance = 1f;
+			float plainsTreeChance = 1f;
 
 			int numTrees = 0;
-			float realDensity = ((float)unitsForest/((float)size*(float)size))*(float)treeDensity;
+			float realDensity = treeDensity;
+			//float realDensity = ((float)unitsForest/((float)size*(float)size))*(float)treeDensity;
 			//print("Input Density: "+treeDensity+" realDensity: "+realDensity+" unitsForest: "+unitsForest+" size"+size);
 			while (numTrees < realDensity)
 			{
@@ -377,25 +393,25 @@ public class terrainGenerator : MonoBehaviour {
 		//init setup of tree
 		TreeInstance tree = new TreeInstance();
 		tree.color = Color.white;
-		tree.heightScale = 1;
-		tree.widthScale = 1;
 		tree.lightmapColor = Color.white;
 
 		//default init
 		tree.prototypeIndex = 0;
 
 		//forest
-		if (t.terrainData.GetAlphamaps(0, 0, size, size)[x,z,forestIndex] != 0f)
+		if (t.terrainData.GetAlphamaps(0, 0, size, size)[z,x,forestIndex] != 0f)
 		{
 			int[] list = new int[3];
 			list[0]=0;
 			list[1]=1;
 			list[2]=6;
 			tree.prototypeIndex = list[Random.Range(0,list.Length-1)];
+			tree.heightScale = (Random.value+0.5f)*2;
+			tree.widthScale = tree.heightScale;
 			//trees 0,1,6
 		}
 		//plains
-		else if (t.terrainData.GetAlphamaps(0, 0, size, size)[x,z,plainsIndex] != 0f)
+		else if (t.terrainData.GetAlphamaps(0, 0, size, size)[z,x,plainsIndex] != 0f)
 		{
 			int[] list = new int[8];
 			list[0]=4;
@@ -407,10 +423,12 @@ public class terrainGenerator : MonoBehaviour {
 			list[6]=10;
 			list[7]=11;
 			tree.prototypeIndex = list[Random.Range(0,list.Length-1)];
+			tree.heightScale = (Random.value+1.0f);
+			tree.widthScale = tree.heightScale;
 			//trees 4-11
 		}
 		//mountains
-		else if (t.terrainData.GetAlphamaps(0, 0, size, size)[x,z,mountainIndex] != 0f)
+		else if (t.terrainData.GetAlphamaps(0, 0, size, size)[z,x,mountainIndex] != 0f)
 		{
 			int[] list = new int[5];
 			list[0]=2;
@@ -419,10 +437,12 @@ public class terrainGenerator : MonoBehaviour {
 			list[3]=10;
 			list[4]=11;
 			tree.prototypeIndex = list[Random.Range(0,list.Length-1)];
+			tree.heightScale = (Random.value+1.0f);
+			tree.widthScale = tree.heightScale;
 			//trees 2,8-11
 		}
 		//beach
-		else if (t.terrainData.GetAlphamaps(0, 0, size, size)[x,z,beachIndex] != 0f)
+		else if (t.terrainData.GetAlphamaps(0, 0, size, size)[z,x,beachIndex] != 0f)
 		{
 			int[] list = new int[5];
 			list[0]=3;
@@ -431,6 +451,8 @@ public class terrainGenerator : MonoBehaviour {
 			list[3]=10;
 			list[4]=11;
 			tree.prototypeIndex = list[Random.Range(0,list.Length-1)];
+			tree.heightScale = (Random.value+1.0f)*4;
+			tree.widthScale = tree.heightScale;
 			//trees 3,8-11
 		}
 		else
@@ -439,9 +461,15 @@ public class terrainGenerator : MonoBehaviour {
 			list[0]=5;
 			list[1]=11;
 			tree.prototypeIndex = list[Random.Range(0,list.Length-1)];
+			tree.heightScale = (Random.value+1.0f)*1.5f;
+			tree.widthScale = tree.heightScale;
 			//trees 5,11
 		}
-			
+		if (tree.prototypeIndex >= 4)
+		{
+			tree.heightScale *= 2;
+			tree.widthScale *= 2;
+		}
 		float nx = ((float)x/size);
 		float nz = ((float)z/size);
 		tree.position = new Vector3 (nx, t.terrainData.GetHeight(z,x), nz);
