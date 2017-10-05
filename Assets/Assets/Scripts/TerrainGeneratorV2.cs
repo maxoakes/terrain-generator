@@ -20,12 +20,15 @@ public class TerrainGeneratorV2 : MonoBehaviour {
 	[Header("Terrain Settings")]
 	public bool createLargeMountains = false;
 	public bool createLargeOceans = false;
+	public bool compressOceanMountains = true;
+	[Range(0.00f, 20.00f)]
+	public float compressionAmount = 1f;
 	[Range(0.00f, 1.00f)]
 	public float mountainSize = .0f;
-	[Range(0.0000f, 0.0100f)]
-	public float landExaggeration = .0009765625f;
 	[Range(0.00000f, 0.00500f)]
 	public float oceanSize = .0009765625f;
+	[Range(0.0f, 1.0f)]
+	public float oceanThreshhold = .5f;
 	[Range(0.0000f, 0.0500f)]
 	public float frequency = .0009765625f;
 	[Range(0.00f, 1.00f)]
@@ -124,17 +127,37 @@ public class TerrainGeneratorV2 : MonoBehaviour {
 				float mountainMultiplier = 1f;
 				if (createLargeMountains)
 				{
-					mountainMultiplier = Mathf.PerlinNoise(xCoord*landExaggeration,zCoord*landExaggeration) + mountainSize;
+					mountainMultiplier = Mathf.PerlinNoise(xCoord*1,zCoord*1) + mountainSize;
 				}
 				e = Mathf.Pow(e,power*mountainMultiplier);
 
 				//add height so we can add seas later
 				//Elevation above sea-level
+				float seaLevelNormalized = (float)grassLevel/(float)height;
 				float easl = e;
-				e+=((float)grassLevel/(float)height);
+				e+=seaLevelNormalized;
 
-				//generate sea
+				//create oceans
+				if (createLargeOceans)
+				{
+					float oceanMultiplier = Mathf.PerlinNoise(xCoord*oceanSize,zCoord*oceanSize);
+					if ((oceanMultiplier > oceanThreshhold))
+					{
+						//lower terrain
+						e -= oceanMultiplier-oceanThreshhold;
+
+						//if there are mountains in the ocean, compress them
+						//uses math and stuff
+						if (compressOceanMountains)
+						{
+							e = (e/(1+oceanMultiplier-oceanThreshhold))*
+								Mathf.Pow((1-(oceanMultiplier-oceanThreshhold)),
+										  compressionAmount+(oceanMultiplier-oceanThreshhold));
+						}
+					}
+				}
 				//generate rivers
+				//not yet
 
 				heights[z,x] = e;
 			}
@@ -169,8 +192,8 @@ public class TerrainGeneratorV2 : MonoBehaviour {
 	{
 		//make el a fraction of the highest height
 		float el = elevation;
-		if (el < seaLevel) {return waterIndex;}
-		else if(el > seaLevel && el < grassLevel) {return sandIndex;}
+		if (el < seaLevel-1) {return waterIndex;}
+		else if(el > seaLevel-1 && el < grassLevel) {return sandIndex;}
 		else if (el > grassLevel && el < rockLevel) {return grassIndex;}
 		else if (el > rockLevel && el < snowLevel) {return rockIndex;}
 		else if (el > snowLevel) {return snowIndex;}
