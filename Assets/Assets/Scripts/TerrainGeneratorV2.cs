@@ -21,14 +21,18 @@ public class TerrainGeneratorV2 : MonoBehaviour {
 	public bool createLargeMountains = false;
 	public bool createLargeOceans = false;
 	public bool compressOceanMountains = true;
+	[Range(0.00000f, 0.00500f)]
+	public float biomeSize = .0009765625f;
 	[Range(0.00f, 20.00f)]
 	public float compressionAmount = 1f;
-	[Range(0.00f, 1.00f)]
-	public float mountainSize = .0f;
-	[Range(0.00000f, 0.00500f)]
-	public float oceanSize = .0009765625f;
 	[Range(0.0f, 1.0f)]
 	public float oceanThreshhold = .5f;
+	[Range(0.0f, 1.0f)]
+	public float mountainThreshhold = .5f;
+	[Range(0.00f, 20.00f)]
+	public float inflationAmount = 1f;
+	[Range(-2.00f, 1.00f)]
+	public float mountainFlatteningAmount = .5f;
 	[Range(0.0000f, 0.0500f)]
 	public float frequency = .0009765625f;
 	[Range(0.00f, 1.00f)]
@@ -50,15 +54,17 @@ public class TerrainGeneratorV2 : MonoBehaviour {
 	[Header("Texture Settings")]
 	public bool useDefaultTextureHeights = true;
 	public int seaLevel = 10;
-	public int grassLevel = 20;
+	public int forestLevel = 20;
+	public int grassLevel = 30;
 	public int rockLevel = 50;
 	public int snowLevel = 90;
 
 	[Header("Prototype Texture Indicies")]
-	public int nullIndex = 5;
-	public int waterIndex = 6;
+	public int nullIndex = 4;
+	public int waterIndex = 5;
 	public int sandIndex = 0;
 	public int grassIndex = 1;
+	public int forestIndex = 6;
 	public int rockIndex = 2;
 	public int snowIndex = 3;
 
@@ -71,7 +77,7 @@ public class TerrainGeneratorV2 : MonoBehaviour {
 		{
 			seaLevel = Mathf.RoundToInt(height/5.3684f);
 			grassLevel = Mathf.RoundToInt(height/5.1000f);
-			rockLevel = Mathf.RoundToInt(height/3.900f);
+			rockLevel = Mathf.RoundToInt(height/3.500f);
 			snowLevel = Mathf.RoundToInt(height/2.5000f);
 		};
 		Terrain thisTerrain = Terrain.activeTerrain;
@@ -124,23 +130,35 @@ public class TerrainGeneratorV2 : MonoBehaviour {
 					(o6 * Mathf.PerlinNoise(32*xCoord*frequency,32*zCoord*frequency)));
 
 				e /= (o1+o2+o3+o4+o5+o6);
-				float mountainMultiplier = 1f;
+
+				e = Mathf.Pow(e,power);
+
+				//create mountains
 				if (createLargeMountains)
 				{
-					mountainMultiplier = Mathf.PerlinNoise(xCoord*1,zCoord*1) + mountainSize;
+					float mountainMultiplier = Mathf.PerlinNoise(xCoord*biomeSize,zCoord*biomeSize);
+					if ((mountainMultiplier < mountainThreshhold))
+					{
+						//lower terrain
+						e += mountainThreshhold-mountainMultiplier;
+
+						//inflate mountains
+						e = (e*(1+mountainThreshhold-mountainMultiplier))*
+							Mathf.Pow((1+(mountainThreshhold-mountainMultiplier)),
+								inflationAmount+(mountainThreshhold-mountainMultiplier));
+					}
 				}
-				e = Mathf.Pow(e,power*mountainMultiplier);
 
 				//add height so we can add seas later
 				//Elevation above sea-level
-				float seaLevelNormalized = (float)grassLevel/(float)height;
+				float seaLevelNormalized = (float)forestLevel/(float)height;
 				float easl = e;
 				e+=seaLevelNormalized;
 
 				//create oceans
 				if (createLargeOceans)
 				{
-					float oceanMultiplier = Mathf.PerlinNoise(xCoord*oceanSize,zCoord*oceanSize);
+					float oceanMultiplier = Mathf.PerlinNoise(xCoord*biomeSize,zCoord*biomeSize);
 					if ((oceanMultiplier > oceanThreshhold))
 					{
 						//lower terrain
@@ -156,6 +174,14 @@ public class TerrainGeneratorV2 : MonoBehaviour {
 						}
 					}
 				}
+
+				//flatten really high mountains
+				float snowHeight = (((float)snowLevel+(float)rockLevel)/2)/(float)height;
+				if (e > snowHeight)
+				{
+					e = (e/(1+e-snowHeight))*Mathf.Pow((1-(e-snowHeight)),mountainFlatteningAmount+(e-snowHeight));
+				}
+
 				//generate rivers
 				//not yet
 
@@ -164,7 +190,7 @@ public class TerrainGeneratorV2 : MonoBehaviour {
 		}
 		return heights;
 	}
-
+		
 	float[,,] generateSplatmap(Terrain t)
 	{
 		float[,,] splatmapData = new float[size,size,t.terrainData.alphamapLayers];
@@ -193,7 +219,8 @@ public class TerrainGeneratorV2 : MonoBehaviour {
 		//make el a fraction of the highest height
 		float el = elevation;
 		if (el < seaLevel-1) {return waterIndex;}
-		else if(el > seaLevel-1 && el < grassLevel) {return sandIndex;}
+		else if(el > seaLevel-1 && el < forestLevel) {return sandIndex;}
+		else if (el > forestLevel && el < grassLevel) {return forestIndex;}
 		else if (el > grassLevel && el < rockLevel) {return grassIndex;}
 		else if (el > rockLevel && el < snowLevel) {return rockIndex;}
 		else if (el > snowLevel) {return snowIndex;}
