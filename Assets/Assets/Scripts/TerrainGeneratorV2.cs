@@ -14,8 +14,20 @@ public class TerrainGeneratorV2 : MonoBehaviour {
 	public int size = 1024;
 	public int height = 100;
 	public float seedLand = 5000f;
+	public float seedBiome = 2000f;
 	public bool useRandomSeed = true;
+	public bool useRandomBiomeSeed = true;
 	public bool resetTerrainParams = false;
+	public bool paintTerrain = true;
+
+	[Header("Island Settings")]
+	public bool makeIsland = false;
+	[Range(0.0f, 1.0f)]
+	public float a = 0.10f;
+	[Range(0.0f, 2.0f)]
+	public float b = 1.0f;
+	[Range(0.0f, 10.0f)]
+	public float c = 1.3f;
 
 	[Header("Terrain Settings")]
 	public bool createLargeMountains = false;
@@ -53,6 +65,7 @@ public class TerrainGeneratorV2 : MonoBehaviour {
 
 	[Header("Texture Settings")]
 	public bool useDefaultTextureHeights = true;
+	public int overlap = 5;
 	public int seaLevel = 10;
 	public int forestLevel = 20;
 	public int grassLevel = 30;
@@ -73,6 +86,7 @@ public class TerrainGeneratorV2 : MonoBehaviour {
 	{
 		//if the user wants a random seed every time
 		if (useRandomSeed) seedLand = (int)(Random.value*100000f);
+		if (useRandomBiomeSeed) seedBiome = (int)(Random.value*100000f);
 		if (useDefaultTextureHeights)
 		{
 			seaLevel = Mathf.RoundToInt(height/5.3684f);
@@ -104,7 +118,10 @@ public class TerrainGeneratorV2 : MonoBehaviour {
 		}
 		thisTerrain.terrainData.SetHeights(0,0,generateHeights(thisTerrain));
 		float[,,] splatmap = generateSplatmap(thisTerrain);
-		thisTerrain.terrainData.SetAlphamaps(0,0,splatmap);
+		if (paintTerrain)
+		{
+			thisTerrain.terrainData.SetAlphamaps(0,0,splatmap);
+		}
 		thisTerrain.GetComponent<TerrainCollider>().terrainData = thisTerrain.terrainData;
 		thisTerrain.Flush();
 
@@ -112,6 +129,7 @@ public class TerrainGeneratorV2 : MonoBehaviour {
 		
 	float[,] generateHeights(Terrain t)
 	{
+		float maxHeight = 0f;
 		float[,] heights = new float[size,size];
 		for (int z=0; z<size; z++)
 		{
@@ -119,6 +137,13 @@ public class TerrainGeneratorV2 : MonoBehaviour {
 			{
 				float xCoord = (float)(seedLand+x);
 				float zCoord = (float)(seedLand+z);
+
+				float xCoordBiome = (float)(seedBiome+x);
+				float zCoordBiome = (float)(seedBiome+z);
+
+				float nx = ((float)x * 1.0f / (float)(size - 1))-0.5f;
+				float nz = ((float)z * 1.0f / (float)(size - 1))-0.5f;
+				float d = 2*Mathf.Sqrt((nx*nx)+(nz*nz));
 
 				//put detail into the heightmap
 				float e = (
@@ -131,12 +156,15 @@ public class TerrainGeneratorV2 : MonoBehaviour {
 
 				e /= (o1+o2+o3+o4+o5+o6);
 
-				e = Mathf.Pow(e,power);
+				if (!makeIsland)
+				{
+					e = Mathf.Pow(e,power);
+				}
 
 				//create mountains
 				if (createLargeMountains)
 				{
-					float mountainMultiplier = Mathf.PerlinNoise(xCoord*biomeSize,zCoord*biomeSize);
+					float mountainMultiplier = Mathf.PerlinNoise(xCoordBiome*biomeSize,zCoordBiome*biomeSize);
 					if ((mountainMultiplier < mountainThreshhold))
 					{
 						//lower terrain
@@ -158,7 +186,7 @@ public class TerrainGeneratorV2 : MonoBehaviour {
 				//create oceans
 				if (createLargeOceans)
 				{
-					float oceanMultiplier = Mathf.PerlinNoise(xCoord*biomeSize,zCoord*biomeSize);
+					float oceanMultiplier = Mathf.PerlinNoise(xCoordBiome*biomeSize,zCoordBiome*biomeSize);
 					if ((oceanMultiplier > oceanThreshhold))
 					{
 						//lower terrain
@@ -176,7 +204,8 @@ public class TerrainGeneratorV2 : MonoBehaviour {
 				}
 
 				//flatten really high mountains
-				float snowHeight = (((float)snowLevel+(float)rockLevel)/2)/(float)height;
+				float snowHeight = (float)rockLevel/(float)height;
+				//float snowHeight = (((float)snowLevel+(float)rockLevel)/2)/(float)height;
 				if (e > snowHeight)
 				{
 					e = (e/(1+e-snowHeight))*Mathf.Pow((1-(e-snowHeight)),mountainFlatteningAmount+(e-snowHeight));
@@ -185,9 +214,18 @@ public class TerrainGeneratorV2 : MonoBehaviour {
 				//generate rivers
 				//not yet
 
+				if (makeIsland)
+				{
+					e = Mathf.Clamp01( (e+a)*(1-(b*Mathf.Pow(d,c))) );
+				}
 				heights[z,x] = e;
+				if (e > maxHeight)
+				{
+					maxHeight = e;
+				}
 			}
 		}
+		print("Max Height: "+maxHeight*height);
 		return heights;
 	}
 		
