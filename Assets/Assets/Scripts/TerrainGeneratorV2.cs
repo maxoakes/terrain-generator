@@ -22,6 +22,8 @@ public class TerrainGeneratorV2 : MonoBehaviour {
 
 	[Header("Island Settings")]
 	public bool makeIsland = false;
+	public bool euclideanDistance = true;
+	public bool multiply = true;
 	[Range(0.0f, 1.0f)]
 	public float a = 0.10f;
 	[Range(0.0f, 2.0f)]
@@ -65,6 +67,7 @@ public class TerrainGeneratorV2 : MonoBehaviour {
 
 	[Header("Texture Settings")]
 	public bool useDefaultTextureHeights = true;
+	public float steepness = 45f;
 	public int overlap = 5;
 	public int seaLevel = 10;
 	public int forestLevel = 20;
@@ -141,10 +144,6 @@ public class TerrainGeneratorV2 : MonoBehaviour {
 				float xCoordBiome = (float)(seedBiome+x);
 				float zCoordBiome = (float)(seedBiome+z);
 
-				float nx = ((float)x * 1.0f / (float)(size - 1))-0.5f;
-				float nz = ((float)z * 1.0f / (float)(size - 1))-0.5f;
-				float d = 2*Mathf.Sqrt((nx*nx)+(nz*nz));
-
 				//put detail into the heightmap
 				float e = (
 					(o1 * Mathf.PerlinNoise(1*xCoord*frequency,1*zCoord*frequency)) + 
@@ -171,9 +170,10 @@ public class TerrainGeneratorV2 : MonoBehaviour {
 						e += mountainThreshhold-mountainMultiplier;
 
 						//inflate mountains
-						e = (e*(1+mountainThreshhold-mountainMultiplier))*
-							Mathf.Pow((1+(mountainThreshhold-mountainMultiplier)),
+						e = (e*(1f+mountainThreshhold-mountainMultiplier))*
+							Mathf.Pow((1f+(mountainThreshhold-mountainMultiplier)),
 								inflationAmount+(mountainThreshhold-mountainMultiplier));
+						if (e >= 1f) e = 1f - (e - 1f);
 					}
 				}
 
@@ -196,8 +196,8 @@ public class TerrainGeneratorV2 : MonoBehaviour {
 						//uses math and stuff
 						if (compressOceanMountains)
 						{
-							e = (e/(1+oceanMultiplier-oceanThreshhold))*
-								Mathf.Pow((1-(oceanMultiplier-oceanThreshhold)),
+							e = (e/(1f+oceanMultiplier-oceanThreshhold))*
+								Mathf.Pow((1f-(oceanMultiplier-oceanThreshhold)),
 										  compressionAmount+(oceanMultiplier-oceanThreshhold));
 						}
 					}
@@ -216,7 +216,14 @@ public class TerrainGeneratorV2 : MonoBehaviour {
 
 				if (makeIsland)
 				{
-					e = Mathf.Clamp01( (e+a)*(1-(b*Mathf.Pow(d,c))) );
+					float d = 0f;
+					float nx = ((float)x * 1.0f / (float)(size - 1))-0.5f;
+					float nz = ((float)z * 1.0f / (float)(size - 1))-0.5f;
+					if (euclideanDistance) d = 2*Mathf.Sqrt((nx*nx)+(nz*nz));
+					else d = 2*Mathf.Max(Mathf.Abs(nx),Mathf.Abs(nz));
+
+					if (multiply) e = Mathf.Clamp01( (e+a)*(1-(b*Mathf.Pow(d,c))) );
+					else e = Mathf.Clamp01( (e+a) - (b*Mathf.Pow(d,c)) );
 				}
 				heights[z,x] = e;
 				if (e > maxHeight)
@@ -241,7 +248,8 @@ public class TerrainGeneratorV2 : MonoBehaviour {
 				float nx = (float)x * 1.0f / (float)(size - 1);
 				float nz = (float)z * 1.0f / (float)(size - 1);
 
-				int indexToApply = getLandType(height);
+				float slope = t.terrainData.GetSteepness(nz,nx);
+				int indexToApply = getLandType(height,slope);
 				for (int i=0; i<t.terrainData.alphamapLayers; i++)
 				{
 					splatmapData[x,z,i] = 0;
@@ -252,15 +260,15 @@ public class TerrainGeneratorV2 : MonoBehaviour {
 		return splatmapData;
 	}
 
-	int getLandType(float elevation)
+	int getLandType(float elevation, float slope)
 	{
 		//make el a fraction of the highest height
 		float el = elevation;
 		if (el < seaLevel-1) {return waterIndex;}
 		else if(el > seaLevel-1 && el < forestLevel) {return sandIndex;}
 		else if (el > forestLevel && el < grassLevel) {return forestIndex;}
-		else if (el > grassLevel && el < rockLevel) {return grassIndex;}
-		else if (el > rockLevel && el < snowLevel) {return rockIndex;}
+		else if (el > grassLevel && el < rockLevel && slope < steepness) {return grassIndex;}
+		else if (el > rockLevel && el < snowLevel || slope > steepness) {return rockIndex;}
 		else if (el > snowLevel) {return snowIndex;}
 		else return nullIndex;
 	}
