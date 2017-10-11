@@ -170,12 +170,6 @@ public class TerrainGeneratorV2 : MonoBehaviour {
 						float difference = mountainThreshhold-mountainMultiplier;
 						//lower terrain
 						e += difference * Mathf.Pow((e), 1.0f/inflationAmount);
-
-						/*//inflate mountains
-						e = (e*(1f+mountainThreshhold-mountainMultiplier))*
-							Mathf.Pow((1f+(mountainThreshhold-mountainMultiplier)),
-								inflationAmount+(mountainThreshhold-mountainMultiplier));
-						if (e >= 1f) e = 1f - (e - 1f);*/
 					}
 				}
 
