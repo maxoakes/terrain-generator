@@ -33,6 +33,7 @@ public class TerrainGeneratorV2 : MonoBehaviour {
 
 	[Header("Terrain Settings")]
 	public bool createLargeMountains = false;
+	public bool compressLargeMountains = false;
 	public bool createLargeOceans = false;
 	public bool compressOceanMountains = true;
 	[Range(0.00000f, 0.00500f)]
@@ -43,10 +44,10 @@ public class TerrainGeneratorV2 : MonoBehaviour {
 	public float oceanThreshhold = .5f;
 	[Range(0.0f, 1.0f)]
 	public float mountainThreshhold = .5f;
-	[Range(0.00f, 20.00f)]
+	[Range(1.0f, 30.0f)]
 	public float inflationAmount = 1f;
-	[Range(-2.00f, 1.00f)]
-	public float mountainFlatteningAmount = .5f;
+	[Range(0.00f, 1.00f)]
+	public float mountainFlatteningAmount = 0.0f;
 	[Range(0.0000f, 0.0500f)]
 	public float frequency = .0009765625f;
 	[Range(0.00f, 1.00f)]
@@ -166,14 +167,15 @@ public class TerrainGeneratorV2 : MonoBehaviour {
 					float mountainMultiplier = Mathf.PerlinNoise(xCoordBiome*biomeSize,zCoordBiome*biomeSize);
 					if ((mountainMultiplier < mountainThreshhold))
 					{
+						float difference = mountainThreshhold-mountainMultiplier;
 						//lower terrain
-						e += mountainThreshhold-mountainMultiplier;
+						e += difference * Mathf.Pow((e), 1.0f/inflationAmount);
 
-						//inflate mountains
+						/*//inflate mountains
 						e = (e*(1f+mountainThreshhold-mountainMultiplier))*
 							Mathf.Pow((1f+(mountainThreshhold-mountainMultiplier)),
 								inflationAmount+(mountainThreshhold-mountainMultiplier));
-						if (e >= 1f) e = 1f - (e - 1f);
+						if (e >= 1f) e = 1f - (e - 1f);*/
 					}
 				}
 
@@ -203,12 +205,15 @@ public class TerrainGeneratorV2 : MonoBehaviour {
 					}
 				}
 
-				//flatten really high mountains
-				float snowHeight = (float)rockLevel/(float)height;
-				//float snowHeight = (((float)snowLevel+(float)rockLevel)/2)/(float)height;
-				if (e > snowHeight)
+				if (compressLargeMountains)
 				{
-					e = (e/(1+e-snowHeight))*Mathf.Pow((1-(e-snowHeight)),mountainFlatteningAmount+(e-snowHeight));
+					//flatten really high mountains
+					float snowHeight = (float)rockLevel/(float)height;
+					//float snowHeight = (((float)snowLevel+(float)rockLevel)/2)/(float)height;
+					if (e > snowHeight)
+					{
+						e = (e/(1+e-snowHeight))*Mathf.Pow((1-(e-snowHeight)),mountainFlatteningAmount+(e-snowHeight));
+					}
 				}
 
 				//generate rivers
